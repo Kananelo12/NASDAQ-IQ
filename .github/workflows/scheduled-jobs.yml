@@ -1,0 +1,53 @@
+# Fallback scheduler, for when the API runs on a Render plan that sleeps.
+# While the API is on Render Starter (always on), in-process cron runs the jobs and this
+# workflow's schedule does nothing.
+#
+# To switch it on (Settings > Secrets and variables > Actions):
+#   Variables: USE_GH_SCHEDULER=true
+#              API_URL=https://nasdaq-intelligence-api.onrender.com
+#              GH_SCHEDULED_JOBS="job-a job-b"   (space-separated names from GET /api/jobs)
+#   Secrets:   JOBS_SECRET (same value as the Render env var)
+# Then set ENABLE_INTERNAL_CRON=false on Render so jobs don't also run in-process.
+#
+# GitHub cron runs in UTC and can start several minutes late, so it is not suitable for
+# release-time-critical work. Jobs triggered here must be idempotent.
+name: Scheduled jobs (fallback)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Job to run now (blank = just wake the API)
+        required: false
+
+jobs:
+  run:
+    if: github.event_name == 'workflow_dispatch' || vars.USE_GH_SCHEDULER == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_URL: ${{ vars.API_URL }}
+      JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
+      JOB_NAMES: ${{ github.event_name == 'workflow_dispatch' && inputs.job || vars.GH_SCHEDULED_JOBS }}
+    steps:
+      - name: Wake API
+        # A sleeping Render service can take up to a minute to start.
+        run: >
+          curl --fail --silent --show-error
+          --retry 6 --retry-delay 15 --retry-all-errors --max-time 90
+          "$API_URL/api/health"
+
+      - name: Run jobs
+        if: env.JOB_NAMES != ''
+        run: |
+          status=0
+          for job in $JOB_NAMES; do
+            echo "::group::$job"
+            curl --fail-with-body --silent --show-error --max-time 900 \
+              -X POST -H "x-jobs-secret: $JOBS_SECRET" \
+              "$API_URL/api/jobs/$job/run" || status=1
+            echo "::endgroup::"
+          done
+          exit $status

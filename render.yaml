@@ -1,0 +1,43 @@
+# Render Blueprint: Dashboard > New > Blueprint, then point it at this repo.
+# Secrets marked `sync: false` are entered in the Render dashboard on first deploy.
+services:
+  - type: web
+    name: nasdaq-intelligence-api
+    runtime: node
+    plan: starter # Always on, so in-process cron runs. See .github/workflows/scheduled-jobs.yml for the free-plan fallback.
+    region: frankfurt # Same region as the Neon project (AWS eu-central-1).
+    buildCommand: npm ci --include=dev && npm run build -w backend
+    preDeployCommand: npm run db:migrate -w backend
+    startCommand: npm run start:prod -w backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_INTERNAL_CRON
+        value: "true"
+      - key: JOBS_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false # The static site URL, e.g. https://nasdaq-intelligence-web.onrender.com
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: nasdaq-intelligence-web
+    runtime: static
+    buildCommand: npm ci && npm run build -w frontend
+    staticPublishPath: frontend/dist
+    routes:
+      # SPA fallback so deep links like /events/123 load index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_URL
+        sync: false # The API URL, e.g. https://nasdaq-intelligence-api.onrender.com
