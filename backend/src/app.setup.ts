@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
 import { AUTH, type Auth } from './auth/auth.js';
+import { requestLogger } from './common/request-logger.js';
 import type { Env } from './config/env.js';
 
 /**
@@ -19,7 +20,11 @@ export function configureApp(app: NestExpressApplication) {
     credentials: true,
   });
 
-  app.getHttpAdapter().getInstance().all('/api/auth/*splat', toNodeHandler(auth));
+  app.use(requestLogger());
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .all('/api/auth/*splat', toNodeHandler(auth));
   app.useBodyParser('json');
   app.useBodyParser('urlencoded', { extended: true });
 

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +20,8 @@ export type AuthenticatedRequest = Request & { auth: AuthSession };
 // Registered globally: every route requires an allowed, signed-in user unless @Public().
 @Injectable()
 export class AuthGuard implements CanActivate {
+  private readonly logger = new Logger(AuthGuard.name);
+
   constructor(
     @Inject(AUTH) private readonly auth: Auth,
     private readonly reflector: Reflector,
@@ -40,7 +43,12 @@ export class AuthGuard implements CanActivate {
 
     const allowedEmails = this.config.get('ALLOWED_EMAILS', { infer: true });
     if (!isEmailAllowed(session.user.email, allowedEmails)) {
-      throw new ForbiddenException('This account is not allowed to use the app');
+      this.logger.warn(
+        `Access denied: ${session.user.email} has a session but is not in ALLOWED_EMAILS`,
+      );
+      throw new ForbiddenException(
+        'This account is not allowed to use the app',
+      );
     }
 
     request.auth = session;

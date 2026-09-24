@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
@@ -26,7 +27,20 @@ type AuthEnv = Pick<
  * removing an email revokes access immediately.
  */
 export function createAuth(db: Database, env: AuthEnv) {
+  const logger = new Logger('Auth');
+
   return betterAuth({
+    // Route Better Auth's own messages (OAuth errors, misconfiguration) through Nest's logger.
+    logger: {
+      level: 'info',
+      log: (level, message, ...args) => {
+        const text = [message, ...args.map(formatLogArg)].join(' ');
+        if (level === 'error') logger.error(text);
+        else if (level === 'warn') logger.warn(text);
+        else if (level === 'debug') logger.debug(text);
+        else logger.log(text);
+      },
+    },
     appName: 'NASDAQ Macro Intelligence',
     baseURL: env.APP_URL,
     basePath: '/api/auth',
@@ -45,6 +59,9 @@ export function createAuth(db: Database, env: AuthEnv) {
         create: {
           before: async (user) => {
             if (!isEmailAllowed(user.email, env.ALLOWED_EMAILS)) {
+              logger.warn(
+                `Sign-in rejected: ${user.email} is not in ALLOWED_EMAILS`,
+              );
               throw new APIError('FORBIDDEN', {
                 message: 'This account is not allowed to use the app',
               });
@@ -54,6 +71,11 @@ export function createAuth(db: Database, env: AuthEnv) {
       },
     },
   });
+}
+
+function formatLogArg(arg: unknown) {
+  if (arg instanceof Error) return arg.stack ?? arg.message;
+  return typeof arg === 'string' ? arg : JSON.stringify(arg);
 }
 
 export type Auth = ReturnType<typeof createAuth>;
