@@ -21,8 +21,16 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: CORS_ORIGIN
+      - key: APP_URL
         sync: false # The static site URL, e.g. https://nasdaq-intelligence-web.onrender.com
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ALLOWED_EMAILS
+        sync: false # Comma-separated Google account emails allowed into the app
       - key: GEMINI_API_KEY
         sync: false
 
@@ -32,6 +40,11 @@ services:
     buildCommand: npm ci && npm run build -w frontend
     staticPublishPath: frontend/dist
     routes:
+      # Serve the API under the site's own origin so the auth cookie is first-party.
+      # Update the destination if Render assigns the API a different URL.
+      - type: rewrite
+        source: /api/*
+        destination: https://nasdaq-intelligence-api.onrender.com/api/*
       # SPA fallback so deep links like /events/123 load index.html.
       - type: rewrite
         source: /*
@@ -39,5 +52,3 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: VITE_API_URL
-        sync: false # The API URL, e.g. https://nasdaq-intelligence-api.onrender.com

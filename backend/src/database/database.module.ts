@@ -9,7 +9,10 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import type { Env } from '../config/env.js';
-import * as schema from './schema.js';
+import * as authSchema from './auth-schema.js';
+import * as appSchema from './schema.js';
+
+const schema = { ...appSchema, ...authSchema };
 
 export const DB = Symbol('DB');
 export type Database = NodePgDatabase<typeof schema>;

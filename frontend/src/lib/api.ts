@@ -1,4 +1,6 @@
-const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`
+// Same origin in every environment: the Vite dev proxy locally, a Render rewrite in
+// production. That keeps the auth session cookie first-party.
+const API_BASE = '/api'
 
 export class ApiError extends Error {
   readonly status: number
